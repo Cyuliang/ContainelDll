@@ -7,10 +7,21 @@ namespace ContainelDll
 {
     public class Container
     {
-        public delegate void NewLpnDelegate(object sender,NewLpnEventArgs e);
+        /// <summary>
+        /// 数据事件
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        public delegate void NewLpnDelegate(object sender, NewLpnEventArgs e);        
         public event NewLpnDelegate NewLpnEvent;
+        public delegate void UpdateLpnDelegate(object sender, UpdateLpnEventArgs e);
+        public event UpdateLpnDelegate UpdateLpnEvent;
+        public delegate void ConNumDelegate(object sender, ConNumEventArgs e);
+        public event ConNumDelegate ConNumEvent;
 
-        private NewLpnEventArgs args = new NewLpnEventArgs();
+        public NewLpnEventArgs NewLpnArgs = new NewLpnEventArgs();
+        public UpdateLpnEventArgs UpdateLpnArgs = new UpdateLpnEventArgs();
+        public ConNumEventArgs ConNumArgs = new ConNumEventArgs();
 
         /// <summary>
         /// 处理信息委托
@@ -21,7 +32,6 @@ namespace ContainelDll
         /// 定时重连
         /// </summary>
         private System.Threading.Timer _Timer = null;
-
 #pragma warning disable IDE0044 // 添加只读修饰符
         private IPEndPoint IPE = null;
 #pragma warning restore IDE0044 // 添加只读修饰符
@@ -73,6 +83,9 @@ namespace ContainelDll
             }
         }
 
+        public static int SIZE = 4096;
+        public byte[] buffer = new byte[SIZE];
+
         /// <summary>
         /// 异步接收数据
         /// </summary>
@@ -81,7 +94,7 @@ namespace ContainelDll
         {
             try
             {
-                Client.BeginReceive(DATA.buffer, 0, DATA.SIZE, 0, new AsyncCallback(ReceiveCallBack), Client);
+                Client.BeginReceive(buffer, 0, Container.SIZE, 0, new AsyncCallback(ReceiveCallBack), Client);
             }
             catch (Exception ex)
             {
@@ -100,7 +113,7 @@ namespace ContainelDll
             {
                 Client = (Socket)ar.AsyncState;
                 int DataSize = Client.EndReceive(ar);
-                string str = System.Text.Encoding.ASCII.GetString(DATA.buffer, 0, DataSize).Trim();
+                string str = System.Text.Encoding.ASCII.GetString(buffer, 0, DataSize).Trim();
 
                 while (str.Length > 10)//循环处理所有接收到的数据数据
                 {
@@ -110,13 +123,8 @@ namespace ContainelDll
                         string tmpData = str.Substring(0, index);
                         str = str.Remove(0, index);
 
-                        MessageAction?.Invoke(string.Format("Get Date：{0}", DATA.SplitData(tmpData).Trim()));
-
-                        if(NewLpnEvent!=null)
-                        {
-                            args.TriggerTime = 1;
-                            NewLpnEvent(this, args);
-                        }
+                        MessageAction?.Invoke(string.Format("Get Date：{0}", tmpData));
+                        SplitData(tmpData);//分割数据
                     }
                     else//删除第一位，重新校验
                     {
@@ -126,7 +134,7 @@ namespace ContainelDll
 
                 if (DataSize > 0)//收到数据,循环接收数据。
                 {
-                    Client.BeginReceive(DATA.buffer, 0, DATA.SIZE, 0, new AsyncCallback(ReceiveCallBack), Client);
+                    Client.BeginReceive(buffer, 0, Container.SIZE, 0, new AsyncCallback(ReceiveCallBack), Client);
                 }
                 else
                 {
@@ -143,104 +151,232 @@ namespace ContainelDll
             }
         }
 
-        class DATA
+        /// <summary>
+        /// 分割数据
+        /// </summary>
+        /// <param name="str"></param>
+        /// <returns></returns>
+        public void SplitData(string str)
         {
-            public static int SIZE = 4096;
-            public static byte[] buffer = new byte[SIZE];
-            public static Dictionary<string, string> dict = new Dictionary<string, string>();
-
-
-            /// <summary>
-            /// 分解数据
-            /// </summary>
-            /// <param name="str"></param>
-            public static string SplitData(string str)
+            string tmp = string.Empty;
+            string[] tmpString = str.Split('|');
+            tmpString[tmpString.Length - 1] = tmpString[tmpString.Length - 1].Split(']')[0];
+            if (tmpString[0] == "[C")
             {
-                string tmp = string.Empty;
-                string[] tmpString = str.Split('|');
-                tmpString[tmpString.Length - 1] = tmpString[tmpString.Length - 1].Split(']')[0];
-                if (tmpString[0] == "[C")
-                {
-                    tmp = ContainerNum(tmpString)["ContainerNum1"];
-                }
-                else if (tmpString[0] == "[U")
-                {
-                    tmp = UpdateLpn(tmpString)["Lpn"];
-                }
-                else if (tmpString[0] == "[N")
-                {
-                    tmp = NewLpn(tmpString)["Lpn"];
-                }
-                else
-                {
-                    ;//预留
-                }
-                return tmp;
+                ContainerNum(tmpString);
             }
-
-
-            /// <summary>
-            /// 空车车牌
-            /// </summary>
-            /// <param name="str"></param>
-            /// <returns></returns>
-            public static Dictionary<string, string> NewLpn(string[] str)
+            else if (tmpString[0] == "[U")
             {
-                dict["TriggerTime"] = str[1];
-                dict["LaneNum"] = str[2];
-                dict["Lpn"] = str[3];
-                dict["Color"] = str[4];
-
-                return dict;
-                //string jsonStr = JsonConvert.SerializeObject(dict);
-                //return jsonStr;            
+                UpdateLpn(tmpString);
             }
-
-            /// <summary>
-            /// 重车车牌
-            /// </summary>
-            /// <param name="str"></param>
-            /// <returns></returns>
-            public static Dictionary<string, string> UpdateLpn(string[] str)
+            else if (tmpString[0] == "[N")
             {
-                dict["TriggerTime"] = str[1];
-                dict["LaneNum"] = str[2];
-                dict["Lpn"] = str[3];
-                dict["Color"] = str[4];
-
-                return dict;
-                //string jsonStr = JsonConvert.SerializeObject(dict);
-                //return jsonStr;
+                NewLpn(tmpString);
             }
-
-            /// <summary>
-            /// 集装箱
-            /// </summary>
-            /// <param name="str"></param>
-            /// <returns></returns>
-            public static Dictionary<string, string> ContainerNum(string[] str)
+            else
             {
-                dict["TriggerTime"] = str[1];
-                dict["LaneNum"] = str[2];
-                dict["ContainerType"] = str[3];
-                dict["ContainerNum1"] = str[4];
-                dict["CheckNum1"] = str[5];
+                ;//预留
+            }
+        }
+
+        //public Dictionary<string, string> dict = new Dictionary<string, string>();
+
+        /// <summary>
+        /// 空车车牌
+        /// </summary>
+        /// <param name="str"></param>
+        /// <returns></returns>
+        public void NewLpn(string[] str)
+        {
+            //dict["TriggerTime"] = str[1];
+            //dict["LaneNum"] = str[2];
+            //dict["Lpn"] = str[3];
+            //dict["Color"] = str[4];
+
+            if(NewLpnEvent!=null)
+            {
+                NewLpnArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss",System.Globalization.CultureInfo.CurrentCulture);
+                NewLpnArgs.LaneNum = int.Parse(str[2]);
+                NewLpnArgs.Lpn = str[3];
+                NewLpnArgs.Color = int.Parse(str[4]);
+                NewLpnEvent(this, NewLpnArgs);//触发空车牌事件
+            }
+            //string jsonStr = JsonConvert.SerializeObject(dict);
+            //return jsonStr;            
+        }
+
+        /// <summary>
+        /// 重车车牌
+        /// </summary>
+        /// <param name="str"></param>
+        /// <returns></returns>
+        public void UpdateLpn(string[] str)
+        {
+            //dict["TriggerTime"] = str[1];
+            //dict["LaneNum"] = str[2];
+            //dict["Lpn"] = str[3];
+            //dict["Color"] = str[4];
+
+            if (UpdateLpnEvent != null)
+            {
+                UpdateLpnArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss", System.Globalization.CultureInfo.CurrentCulture);
+                UpdateLpnArgs.LaneNum = int.Parse(str[2]);
+                UpdateLpnArgs.Lpn = str[3];
+                UpdateLpnArgs.Color = int.Parse(str[4]);
+                UpdateLpnEvent(this, UpdateLpnArgs);//触发重车牌事件
+            }
+            //string jsonStr = JsonConvert.SerializeObject(dict);
+            //return jsonStr;
+        }
+
+        /// <summary>
+        /// 集装箱
+        /// </summary>
+        /// <param name="str"></param>
+        /// <returns></returns>
+        public void ContainerNum(string[] str)
+        {
+            //dict["TriggerTime"] = str[1];
+            //dict["LaneNum"] = str[2];
+            //dict["ContainerType"] = str[3];
+            //dict["ContainerNum1"] = str[4];
+            //dict["CheckNum1"] = str[5];
+            //if (str.Length == 7)//单箱
+            //{
+            //    dict["ISO1"] = str[6];
+            //}
+            //else//双箱==9
+            //{
+            //    dict["ContainerNum2"] = str[6];
+            //    dict["CheckNum2"] = str[7];
+            //    dict["ISO1"] = str[8];
+            //    dict["ISO2"] = str[9];
+            //}
+
+            if (ConNumEvent != null)
+            {
+                ConNumArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss", System.Globalization.CultureInfo.CurrentCulture);
+                ConNumArgs.LaneNum = int.Parse(str[2]);
+                ConNumArgs.ContainerType = int.Parse(str[3]);
+                ConNumArgs.ContainerNum1 = str[4];
+                ConNumArgs.CheckNum1 = str[5];
                 if (str.Length == 7)//单箱
                 {
-                    dict["ISO1"] = str[6];
+                    ConNumArgs.ISO1 = str[6];
                 }
                 else//双箱==9
                 {
-                    dict["ContainerNum2"] = str[6];
-                    dict["CheckNum2"] = str[7];
-                    dict["ISO1"] = str[8];
-                    dict["ISO2"] = str[9];
+                    ConNumArgs.ContainerNum2 = str[6];
+                    ConNumArgs.CheckNum2 = str[7];
+                    ConNumArgs.ISO1 = str[8];
+                    ConNumArgs.ISO2 = str[9];
                 }
-
-                return dict;
-                //string jsonStr = JsonConvert.SerializeObject(dict);
-                //return jsonStr;
+                ConNumEvent(this, ConNumArgs);//触发箱号事件
             }
+            //string jsonStr = JsonConvert.SerializeObject(dict);
+            //return jsonStr;
         }
     }
 }
+
+//        class DATA
+//        {
+//            public static int SIZE = 4096;
+//            public static byte[] buffer = new byte[SIZE];
+//            public static Dictionary<string, string> dict = new Dictionary<string, string>();
+
+
+//            /// <summary>
+//            /// 分解数据
+//            /// </summary>
+//            /// <param name="str"></param>
+//            public static string SplitData(string str)
+//            {
+//                string tmp = string.Empty;
+//                string[] tmpString = str.Split('|');
+//                tmpString[tmpString.Length - 1] = tmpString[tmpString.Length - 1].Split(']')[0];
+//                if (tmpString[0] == "[C")
+//                {
+//                    tmp = ContainerNum(tmpString)["ContainerNum1"];
+//                }
+//                else if (tmpString[0] == "[U")
+//                {
+//                    tmp = UpdateLpn(tmpString)["Lpn"];
+//                }
+//                else if (tmpString[0] == "[N")
+//                {
+//                    tmp = NewLpn(tmpString)["Lpn"];
+//                }
+//                else
+//                {
+//                    ;//预留
+//                }
+//                return tmp;
+//            }
+
+
+//            /// <summary>
+//            /// 空车车牌
+//            /// </summary>
+//            /// <param name="str"></param>
+//            /// <returns></returns>
+//            public static Dictionary<string, string> NewLpn(string[] str)
+//            {
+//                dict["TriggerTime"] = str[1];
+//                dict["LaneNum"] = str[2];
+//                dict["Lpn"] = str[3];
+//                dict["Color"] = str[4];
+
+//                return dict;
+//                //string jsonStr = JsonConvert.SerializeObject(dict);
+//                //return jsonStr;            
+//            }
+
+//            /// <summary>
+//            /// 重车车牌
+//            /// </summary>
+//            /// <param name="str"></param>
+//            /// <returns></returns>
+//            public static Dictionary<string, string> UpdateLpn(string[] str)
+//            {
+//                dict["TriggerTime"] = str[1];
+//                dict["LaneNum"] = str[2];
+//                dict["Lpn"] = str[3];
+//                dict["Color"] = str[4];
+
+//                return dict;
+//                //string jsonStr = JsonConvert.SerializeObject(dict);
+//                //return jsonStr;
+//            }
+
+//            /// <summary>
+//            /// 集装箱
+//            /// </summary>
+//            /// <param name="str"></param>
+//            /// <returns></returns>
+//            public static Dictionary<string, string> ContainerNum(string[] str)
+//            {
+//                dict["TriggerTime"] = str[1];
+//                dict["LaneNum"] = str[2];
+//                dict["ContainerType"] = str[3];
+//                dict["ContainerNum1"] = str[4];
+//                dict["CheckNum1"] = str[5];
+//                if (str.Length == 7)//单箱
+//                {
+//                    dict["ISO1"] = str[6];
+//                }
+//                else//双箱==9
+//                {
+//                    dict["ContainerNum2"] = str[6];
+//                    dict["CheckNum2"] = str[7];
+//                    dict["ISO1"] = str[8];
+//                    dict["ISO2"] = str[9];
+//                }
+
+//                return dict;
+//                //string jsonStr = JsonConvert.SerializeObject(dict);
+//                //return jsonStr;
+//            }
+//        }
+//    }
+//}
