@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 
@@ -7,53 +6,61 @@ namespace ContainelDll
 {
     public class Container
     {
-        /// <summary>
-        /// 数据事件
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        public delegate void NewLpnDelegate(object sender, NewLpnEventArgs e);        
-        public event NewLpnDelegate NewLpnEvent;
-        public delegate void UpdateLpnDelegate(object sender, UpdateLpnEventArgs e);
-        public event UpdateLpnDelegate UpdateLpnEvent;
-        public delegate void ConNumDelegate(object sender, ConNumEventArgs e);
-        public event ConNumDelegate ConNumEvent;
+        # region//来车触发数据事件
+        public event EventHandler<NewLpnEventArgs> NewLpnEvent;             //空车车牌
+        public event EventHandler<UpdateLpnEventArgs> UpdateLpnEvent;       //重车车牌
+        public event EventHandler<ConNumEventArgs> ConNumEvent;             //集装箱号码
+        public event EventHandler<MessageEventArgs> MessageEvent;           //运行消息
+        #endregion        
 
-        public NewLpnEventArgs NewLpnArgs = new NewLpnEventArgs();
-        public UpdateLpnEventArgs UpdateLpnArgs = new UpdateLpnEventArgs();
-        public ConNumEventArgs ConNumArgs = new ConNumEventArgs();
+        #region//传递参数
+        private NewLpnEventArgs NewLpnArgs = new NewLpnEventArgs();
+        private UpdateLpnEventArgs UpdateLpnArgs = new UpdateLpnEventArgs();
+        private ConNumEventArgs ConNumArgs = new ConNumEventArgs();
+        private MessageEventArgs MessageArgs = new MessageEventArgs();
+        #endregion
+
+        #region//变量
+        private System.Threading.Timer _Timer = null;                       //定时重连
+        private IPEndPoint IPE = null;                                      //IP,PORT
+        private Socket Client = null;                                       //SOCKET
+        #endregion
 
         /// <summary>
-        /// 处理信息委托
+        /// 运行消息事件
         /// </summary>
-        public Action<string> MessageAction = null;
-
-        /// <summary>
-        /// 定时重连
-        /// </summary>
-        private System.Threading.Timer _Timer = null;
-#pragma warning disable IDE0044 // 添加只读修饰符
-        private IPEndPoint IPE = null;
-#pragma warning restore IDE0044 // 添加只读修饰符
-        private Socket Client = null;
+        /// <param name="arg1"></param>
+        /// <param name="arg2"></param>
+        private void MessageEventFunC(string  arg1,string arg2)
+        {
+            if(MessageEvent!=null)
+            {
+                MessageArgs.FunName = arg1;
+                MessageArgs.Message = arg2;
+                MessageEvent(this, MessageArgs);
+            }
+        }
 
         /// <summary>
         /// 初始化自动连接
         /// </summary>
-        public Container(string Ip, int Port)
+        /// <param name="Ip">服务器地址</param>
+        /// <param name="Port">服务器端口</param>
+        /// <param name="Intervals">间隔时间</param>
+        public Container(string Ip, int Port,int Intervals)
         {
             IPE = new IPEndPoint(IPAddress.Parse(Ip), Port);
-            _Timer = new System.Threading.Timer(AsyncConect2server, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+            _Timer = new System.Threading.Timer(AsyncConect2server, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(Intervals));
         }
 
         /// <summary>
         /// 异步链接服务器
         /// </summary>
-        public void AsyncConect2server(object state)
+        private void AsyncConect2server(object state)
         {
             Client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             IAsyncResult ar = Client.BeginConnect(IPE, new AsyncCallback(ConnectCallBack), Client);
-            MessageAction?.Invoke("start link to server");
+            MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name,"Start Link To Socket Server");
             ar.AsyncWaitHandle.WaitOne();
         }
 
@@ -69,28 +76,28 @@ namespace ContainelDll
                 Client.EndConnect(ar);
                 AsyncReceive(Client);
                 _Timer.Change(-1, -1);//停止定时器
-                MessageAction?.Invoke(string.Format("Connect server：{0} \r\n", Client.RemoteEndPoint.ToString()));
+                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "Link To Socket Server Finsh");
             }
             catch (SocketException ex)
             {
                 Client.Close();
-                MessageAction?.Invoke(string.Format("An error occurred when attempting to access the socket：{0}\r\n", ex.ToString()));
+                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("An error occurred when attempting to access the socket：{0}\r\n", ex.ToString()));
             }
             catch (ObjectDisposedException ex)
             {
                 Client.Close();
-                MessageAction?.Invoke(string.Format("The Socket has been closed：{0}\r\n", ex.ToString()));
+                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("The Socket has been closed：{0}\r\n", ex.ToString()));
             }
         }
 
-        public static int SIZE = 4096;
-        public byte[] buffer = new byte[SIZE];
+        private static int SIZE = 4096;
+        private byte[] buffer = new byte[SIZE];
 
         /// <summary>
         /// 异步接收数据
         /// </summary>
         /// <param name="Client"></param>
-        public void AsyncReceive(Socket Client)
+        private void AsyncReceive(Socket Client)
         {
             try
             {
@@ -99,7 +106,7 @@ namespace ContainelDll
             catch (Exception ex)
             {
                 Client.Close();
-                MessageAction?.Invoke(string.Format("link error：{0}\r\n", ex.ToString()));
+                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("link error：{0}\r\n", ex.ToString()));
             }
         }
 
@@ -123,7 +130,7 @@ namespace ContainelDll
                         string tmpData = str.Substring(0, index);
                         str = str.Remove(0, index);
 
-                        MessageAction?.Invoke(string.Format("Get Date：{0}", tmpData));
+                        MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("Get Date：{0}", tmpData));
                         SplitData(tmpData);//分割数据
                     }
                     else//删除第一位，重新校验
@@ -140,14 +147,14 @@ namespace ContainelDll
                 {
                     Client.Close();
                     _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-                    MessageAction?.Invoke("link of close \r\n");
+                    MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "link of close \r\n");
                 }
             }
             catch (Exception ex)
             {
                 Client.Close();
                 _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-                MessageAction?.Invoke(ex.ToString());
+                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, ex.ToString());
             }
         }
 
@@ -156,7 +163,7 @@ namespace ContainelDll
         /// </summary>
         /// <param name="str"></param>
         /// <returns></returns>
-        public void SplitData(string str)
+        private void SplitData(string str)
         {
             string tmp = string.Empty;
             string[] tmpString = str.Split('|');
@@ -175,24 +182,17 @@ namespace ContainelDll
             }
             else
             {
-                ;//预留
+                ;
             }
         }
-
-        //public Dictionary<string, string> dict = new Dictionary<string, string>();
 
         /// <summary>
         /// 空车车牌
         /// </summary>
         /// <param name="str"></param>
         /// <returns></returns>
-        public void NewLpn(string[] str)
+        private void NewLpn(string[] str)
         {
-            //dict["TriggerTime"] = str[1];
-            //dict["LaneNum"] = str[2];
-            //dict["Lpn"] = str[3];
-            //dict["Color"] = str[4];
-
             if(NewLpnEvent!=null)
             {
                 NewLpnArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss",System.Globalization.CultureInfo.CurrentCulture);
@@ -200,9 +200,7 @@ namespace ContainelDll
                 NewLpnArgs.Lpn = str[3];
                 NewLpnArgs.Color = int.Parse(str[4]);
                 NewLpnEvent(this, NewLpnArgs);//触发空车牌事件
-            }
-            //string jsonStr = JsonConvert.SerializeObject(dict);
-            //return jsonStr;            
+            }   
         }
 
         /// <summary>
@@ -210,13 +208,8 @@ namespace ContainelDll
         /// </summary>
         /// <param name="str"></param>
         /// <returns></returns>
-        public void UpdateLpn(string[] str)
+        private void UpdateLpn(string[] str)
         {
-            //dict["TriggerTime"] = str[1];
-            //dict["LaneNum"] = str[2];
-            //dict["Lpn"] = str[3];
-            //dict["Color"] = str[4];
-
             if (UpdateLpnEvent != null)
             {
                 UpdateLpnArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss", System.Globalization.CultureInfo.CurrentCulture);
@@ -225,8 +218,6 @@ namespace ContainelDll
                 UpdateLpnArgs.Color = int.Parse(str[4]);
                 UpdateLpnEvent(this, UpdateLpnArgs);//触发重车牌事件
             }
-            //string jsonStr = JsonConvert.SerializeObject(dict);
-            //return jsonStr;
         }
 
         /// <summary>
@@ -234,25 +225,8 @@ namespace ContainelDll
         /// </summary>
         /// <param name="str"></param>
         /// <returns></returns>
-        public void ContainerNum(string[] str)
+        private void ContainerNum(string[] str)
         {
-            //dict["TriggerTime"] = str[1];
-            //dict["LaneNum"] = str[2];
-            //dict["ContainerType"] = str[3];
-            //dict["ContainerNum1"] = str[4];
-            //dict["CheckNum1"] = str[5];
-            //if (str.Length == 7)//单箱
-            //{
-            //    dict["ISO1"] = str[6];
-            //}
-            //else//双箱==9
-            //{
-            //    dict["ContainerNum2"] = str[6];
-            //    dict["CheckNum2"] = str[7];
-            //    dict["ISO1"] = str[8];
-            //    dict["ISO2"] = str[9];
-            //}
-
             if (ConNumEvent != null)
             {
                 ConNumArgs.TriggerTime = DateTime.ParseExact(str[1], "yyyyMMddHHmmss", System.Globalization.CultureInfo.CurrentCulture);
@@ -273,8 +247,6 @@ namespace ContainelDll
                 }
                 ConNumEvent(this, ConNumArgs);//触发箱号事件
             }
-            //string jsonStr = JsonConvert.SerializeObject(dict);
-            //return jsonStr;
         }
     }
 }

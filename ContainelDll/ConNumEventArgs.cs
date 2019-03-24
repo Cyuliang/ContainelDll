@@ -6,8 +6,6 @@ namespace ContainelDll
     {
         public DateTime TriggerTime { get; set; }
         public int LaneNum { get; set; }
-        public string Lpn { get; set; }
-        public int Color { get; set; }
         public int ContainerType { get; set; }
         public string ContainerNum1 { get; set; }
         public string CheckNum1 { get; set; }
