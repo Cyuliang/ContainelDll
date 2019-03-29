@@ -90,7 +90,8 @@ namespace ContainelDll
             }
         }
 
-        private static int SIZE = 4096;
+        private const int SIZE = 4096;
+        //private static int SIZE = 4096;
         private byte[] buffer = new byte[SIZE];
 
         /// <summary>
@@ -250,7 +251,7 @@ namespace ContainelDll
         }
     }
 }
-
+#region
 //        class DATA
 //        {
 //            public static int SIZE = 4096;
@@ -352,3 +353,4 @@ namespace ContainelDll
 //        }
 //    }
 //}
+#endregion
