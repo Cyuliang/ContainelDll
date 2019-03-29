@@ -9,5 +9,4 @@ namespace ContainelDll
         public string Lpn { get; set; }
         public int Color { get; set; }
     }
-
 }

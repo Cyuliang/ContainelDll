@@ -11,6 +11,7 @@ namespace ContainelDll
         public event EventHandler<UpdateLpnEventArgs> UpdateLpnEvent;       //重车车牌
         public event EventHandler<ConNumEventArgs> ConNumEvent;             //集装箱号码
         public event EventHandler<MessageEventArgs> MessageEvent;           //运行消息
+        public event EventHandler<SocketStatusEventArgs> SocketStatusEvent; //链接状态事件
         #endregion        
 
         #region//传递参数
@@ -18,6 +19,7 @@ namespace ContainelDll
         private UpdateLpnEventArgs UpdateLpnArgs = new UpdateLpnEventArgs();
         private ConNumEventArgs ConNumArgs = new ConNumEventArgs();
         private MessageEventArgs MessageArgs = new MessageEventArgs();
+        private SocketStatusEventArgs SocketStatusArgs = new SocketStatusEventArgs();
         #endregion
 
         #region//变量
@@ -38,6 +40,19 @@ namespace ContainelDll
                 MessageArgs.FunName = arg1;
                 MessageArgs.Message = arg2;
                 MessageEvent(this, MessageArgs);
+            }
+        }
+
+        /// <summary>
+        /// 链接状态事件
+        /// </summary>
+        /// <param name="arg1"></param>
+        private void SocketStatusEventFunC(bool arg1)
+        {
+            if(SocketStatusEvent!=null)
+            {
+                SocketStatusArgs.Status = arg1;
+                SocketStatusEvent(this, SocketStatusArgs);
             }
         }
 
@@ -77,22 +92,31 @@ namespace ContainelDll
                 AsyncReceive(Client);
                 _Timer.Change(-1, -1);//停止定时器
                 MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "Link To Socket Server Finsh");
+
+                SocketStatusEventFunC(true);
             }
             catch (SocketException ex)
             {
                 Client.Close();
                 MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("An error occurred when attempting to access the socket：{0}\r\n", ex.ToString()));
+
+                SocketStatusEventFunC(false);
             }
             catch (ObjectDisposedException ex)
             {
                 Client.Close();
                 MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("The Socket has been closed：{0}\r\n", ex.ToString()));
+
+                SocketStatusEventFunC(false);
             }
         }
 
         private const int SIZE = 4096;
+
         //private static int SIZE = 4096;
+#pragma warning disable IDE0044 // 添加只读修饰符
         private byte[] buffer = new byte[SIZE];
+#pragma warning restore IDE0044 // 添加只读修饰符
 
         /// <summary>
         /// 异步接收数据
@@ -108,6 +132,8 @@ namespace ContainelDll
             {
                 Client.Close();
                 MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, string.Format("link error：{0}\r\n", ex.ToString()));
+
+                SocketStatusEventFunC(false);
             }
         }
 
@@ -149,6 +175,8 @@ namespace ContainelDll
                     Client.Close();
                     _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                     MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "link of close \r\n");
+
+                    SocketStatusEventFunC(false);
                 }
             }
             catch (Exception ex)
@@ -156,6 +184,8 @@ namespace ContainelDll
                 Client.Close();
                 _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                 MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, ex.ToString());
+
+                SocketStatusEventFunC(false);
             }
         }
 
