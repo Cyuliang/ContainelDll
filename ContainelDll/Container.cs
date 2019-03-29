@@ -147,7 +147,7 @@ namespace ContainelDll
             {
                 Client = (Socket)ar.AsyncState;
                 int DataSize = Client.EndReceive(ar);
-                string str = System.Text.Encoding.ASCII.GetString(buffer, 0, DataSize).Trim();
+                string str = System.Text.Encoding.Default.GetString(buffer, 0, DataSize).Trim();
 
                 while (str.Length > 10)//循环处理所有接收到的数据数据
                 {
@@ -174,16 +174,16 @@ namespace ContainelDll
                 {
                     Client.Close();
                     _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-                    MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "link of close \r\n");
+                    //MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, "link of close \r\n");
 
                     SocketStatusEventFunC(false);
                 }
             }
-            catch (Exception ex)
+            catch (Exception /*ex*/)
             {
                 Client.Close();
                 _Timer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-                MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, ex.ToString());
+                //MessageEventFunC(System.Reflection.MethodBase.GetCurrentMethod().Name, ex.ToString());
 
                 SocketStatusEventFunC(false);
             }
