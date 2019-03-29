@@ -3,6 +3,13 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>AnyCPU;x86;x64</Platforms>
+    <ApplicationIcon>1189944372_b.ico</ApplicationIcon>
+    <Authors>程玉良</Authors>
+    <Company>深圳众百源科技有限公司</Company>
+    <Description>箱号识别系统对接动态库</Description>
+    <Copyright>深圳众百源科技有限公司</Copyright>
+    <PackageProjectUrl>www.szocr.com</PackageProjectUrl>
+    <PackageLicenseUrl>www.szocr.com</PackageLicenseUrl>
   </PropertyGroup>
 
 </Project>
